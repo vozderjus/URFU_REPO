@@ -1,20 +1,40 @@
 def lucky_ticket(ticket):
-    if str(ticket).isdigit():
-        ticket = str(ticket).zfill(6)
-        if sum(map(int, ticket[:3])) == sum(map(int, ticket[3:])):
-            return True
-        else:
-            return False
-    else:
-        return False
+    if not isinstance(ticket, (int, str)):
+        raise ValueError()
 
-    return "Ошибка в проге"
+    try:
+        ticket_num = int(str(ticket).strip())
+        if ticket_num < 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise ValueError()
+
+    ticket_str = str(ticket_num).zfill(6)
+
+    if len(ticket_str) > 6:
+        raise ValueError()
+
+    return sum(map(int, ticket_str[:3])) == sum(map(int, ticket_str[3:]))
 
 
-def almost_lucky(ticket):
-    prev_ticket = ticket - 1
-    next_ticket = ticket + 1
-    return lucky_ticket(prev_ticket) or lucky_ticket(next_ticket)
+def is_almost_lucky(ticket):
+    if not isinstance(ticket, (int, str)):
+        raise ValueError()
 
+    try:
+        ticket_num = int(str(ticket).strip())
+        if ticket_num < 0:
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise ValueError()
 
-print(almost_lucky(123320))
+    if ticket_num == 0:
+        return lucky_ticket(1)
+
+    if lucky_ticket(ticket_num - 1):
+        return True
+
+    if lucky_ticket(ticket_num + 1):
+        return True
+
+    return False
