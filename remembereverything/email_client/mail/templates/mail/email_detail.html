@@ -1,0 +1,84 @@
+{% extends 'mail/base.html' %}
+
+{% block title %}{{ email.subject }} - Почтовый клиент{% endblock %}
+
+{% block content %}
+<div class="email-detail">
+    <div class="email-header">
+        <div class="email-actions">
+            <a href="javascript:history.back()" class="btn-secondary">← Назад</a>
+            {% if status.folder != 'ARCHIVE' %}
+            <button onclick="moveEmail({{ email.id }}, 'ARCHIVE')" class="btn-secondary">📦 В архив</button>
+            {% endif %}
+            {% if status.folder != 'TRASH' %}
+            <button onclick="moveEmail({{ email.id }}, 'TRASH')" class="btn-secondary">🗑️ В корзину</button>
+            {% else %}
+            <button onclick="deletePermanently({{ email.id }})" class="btn-danger">❌ Удалить навсегда</button>
+            <button onclick="moveEmail({{ email.id }}, 'INBOX')" class="btn-secondary">↩️ Восстановить</button>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="email-content">
+        <h1>{{ email.subject }}</h1>
+        
+        <div class="email-info">
+            <p><strong>От:</strong> {{ email.sender.username }} ({{ email.sender.email }})</p>
+            <p><strong>Кому:</strong> {{ recipients_list }}</p>
+            <p><strong>Дата:</strong> {{ email.sent_at|date:"d.m.Y H:i"|default:email.created_at|date:"d.m.Y H:i" }}</p>
+            {% if status %}
+            <p><strong>Папка:</strong> {{ status.get_folder_display }}</p>
+            <p><strong>Статус:</strong> {% if status.is_read %}Прочитано{% else %}Новое{% endif %}</p>
+            {% endif %}
+        </div>
+        
+        <div class="email-body">
+            {{ email.body|linebreaks }}
+        </div>
+    </div>
+    
+    <div class="email-reply">
+        <a href="{% url 'compose' %}?reply={{ email.id }}" class="btn-primary">✏️ Ответить</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function moveEmail(emailId, folder) {
+    fetch(`/api/email/${emailId}/move/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({folder: folder})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('Письмо перемещено');
+            window.location.href = document.referrer || '/';
+        }
+    });
+}
+
+function deletePermanently(emailId) {
+    if (confirm('Удалить письмо навсегда?')) {
+        fetch(`/api/email/${emailId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Письмо удалено');
+                window.location.href = '/';
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

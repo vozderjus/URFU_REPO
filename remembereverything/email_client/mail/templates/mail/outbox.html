@@ -1,0 +1,71 @@
+{% extends 'mail/base.html' %}
+
+{% block title %}Отправленные - Почтовый клиент{% endblock %}
+
+{% block content %}
+<div class="folder-header">
+    <h2>📤 Отправленные</h2>
+</div>
+
+{% if emails %}
+<table class="email-list">
+    <thead>
+        <tr>
+            <th>Кому</th>
+            <th>Тема</th>
+            <th>Дата</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for email in emails %}
+        <tr class="email-row" data-email-id="{{ email.id }}">
+            <td class="recipients">
+                {% for recipient in email.recipients.all %}
+                    {{ recipient.email }}{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+            </td>
+            <td class="subject">
+                <a href="{% url 'email_detail' email.id %}" class="email-link">
+                    {{ email.subject }}
+                </a>
+            </td>
+            <td class="date">{{ email.sent_at|date:"d.m.Y H:i" }}</td>
+            <td class="actions">
+                <button onclick="moveEmail({{ email.id }}, 'ARCHIVE')" class="btn-icon" title="В архив">📦</button>
+                <button onclick="moveEmail({{ email.id }}, 'TRASH')" class="btn-icon" title="В корзину">🗑️</button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-folder">
+    <p>Нет отправленных писем</p>
+    <a href="{% url 'compose' %}" class="btn-primary">Написать письмо</a>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function moveEmail(emailId, folder) {
+    fetch(`/api/email/${emailId}/move/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({folder: folder})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const row = document.querySelector(`tr[data-email-id="${emailId}"]`);
+            row.remove();
+            alert('Письмо перемещено');
+        }
+    });
+}
+</script>
+{% endblock %}

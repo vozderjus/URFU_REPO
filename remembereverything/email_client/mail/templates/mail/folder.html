@@ -1,0 +1,115 @@
+{% extends 'mail/base.html' %}
+
+{% block title %}{{ folder_name }} - Почтовый клиент{% endblock %}
+
+{% block content %}
+<div class="folder-header">
+    <h2>
+        {% if folder == 'archive' %}📦{% endif %}
+        {% if folder == 'trash' %}🗑️{% endif %}
+        {% if folder == 'drafts' %}📝{% endif %}
+        {{ folder_name }}
+    </h2>
+</div>
+
+{% if emails %}
+<table class="email-list">
+    <thead>
+        <tr>
+            <th>{% if folder == 'drafts' %}Кому{% else %}Отправитель{% endif %}</th>
+            <th>Тема</th>
+            <th>Дата</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for email in emails %}
+        <tr class="email-row" data-email-id="{{ email.id }}">
+            <td class="sender">
+                {% if folder == 'drafts' %}
+                    {% for recipient in email.recipients.all %}
+                        {{ recipient.email }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                {% else %}
+                    {{ email.sender.username }}
+                {% endif %}
+            </td>
+            <td class="subject">
+                <a href="{% url 'email_detail' email.id %}" class="email-link">
+                    {{ email.subject }}
+                </a>
+            </td>
+            <td class="date">
+                {% if email.sent_at %}
+                    {{ email.sent_at|date:"d.m.Y H:i" }}
+                {% else %}
+                    {{ email.created_at|date:"d.m.Y H:i" }}
+                {% endif %}
+            </td>
+            <td class="actions">
+                {% if folder == 'trash' %}
+                    <button onclick="deletePermanently({{ email.id }})" class="btn-icon" title="Удалить навсегда">❌</button>
+                    <button onclick="moveEmail({{ email.id }}, 'INBOX')" class="btn-icon" title="Восстановить">↩️</button>
+                {% elif folder == 'archive' %}
+                    <button onclick="moveEmail({{ email.id }}, 'INBOX')" class="btn-icon" title="Вернуть во входящие">📥</button>
+                    <button onclick="moveEmail({{ email.id }}, 'TRASH')" class="btn-icon" title="В корзину">🗑️</button>
+                {% elif folder == 'drafts' %}
+                    <button onclick="location.href='{% url 'compose' %}?draft={{ email.id }}'" class="btn-icon" title="Редактировать">✏️</button>
+                    <button onclick="moveEmail({{ email.id }}, 'TRASH')" class="btn-icon" title="В корзину">🗑️</button>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-folder">
+    <p>В папке нет писем</p>
+    {% if folder == 'drafts' %}
+    <a href="{% url 'compose' %}" class="btn-primary">Создать черновик</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function moveEmail(emailId, folder) {
+    fetch(`/api/email/${emailId}/move/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({folder: folder})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            const row = document.querySelector(`tr[data-email-id="${emailId}"]`);
+            row.remove();
+            alert('Письмо перемещено');
+        }
+    });
+}
+
+function deletePermanently(emailId) {
+    if (confirm('Удалить письмо навсегда?')) {
+        fetch(`/api/email/${emailId}/delete/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const row = document.querySelector(`tr[data-email-id="${emailId}"]`);
+                row.remove();
+                alert('Письмо удалено');
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Почтовый клиент{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="{% static 'mail/css/style.css' %}">
+</head>
+<body>
+    {% if user.is_authenticated %}
+    <div class="container">
+        <aside class="sidebar">
+            <div class="user-info">
+                <h3>{{ user.username }}</h3>
+                <p>{{ user.email }}</p>
+            </div>
+            <nav class="nav-menu">
+                <a href="{% url 'compose' %}" class="compose-btn">✏️ Написать письмо</a>
+                <ul>
+                    <li class="{% if folder == 'inbox' %}active{% endif %}">
+                        <a href="{% url 'inbox' %}">📥 Входящие 
+                            {% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}
+                        </a>
+                    </li>
+                    <li class="{% if folder == 'outbox' %}active{% endif %}">
+                        <a href="{% url 'outbox' %}">📤 Отправленные</a>
+                    </li>
+                    <li class="{% if folder == 'archive' %}active{% endif %}">
+                        <a href="{% url 'archive' %}">📦 Архив</a>
+                    </li>
+                    <li class="{% if folder == 'drafts' %}active{% endif %}">
+                        <a href="{% url 'drafts' %}">📝 Черновики</a>
+                    </li>
+                    <li class="{% if folder == 'trash' %}active{% endif %}">
+                        <a href="{% url 'trash' %}">🗑️ Корзина</a>
+                    </li>
+                </ul>
+            </nav>
+            <div class="logout">
+                <a href="{% url 'logout' %}">🚪 Выйти</a>
+            </div>
+        </aside>
+        <main class="content">
+            {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% else %}
+    <main>
+        {% block auth_content %}{% endblock %}
+    </main>
+    {% endif %}
+    
+    <script src="{% static 'mail/js/main.js' %}"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

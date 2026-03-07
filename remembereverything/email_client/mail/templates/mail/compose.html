@@ -1,0 +1,55 @@
+<!-- mail/templates/mail/compose.html -->
+{% extends 'mail/base.html' %}
+
+{% block title %}Написать письмо - Почтовый клиент{% endblock %}
+
+{% block content %}
+<div class="compose-container">
+    <h2>✏️ Написать письмо</h2>
+    
+    {% if messages %}
+    <div class="messages">
+        {% for message in messages %}
+        <div class="message {{ message.tags }}">{{ message }}</div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <form method="post" class="compose-form">
+        {% csrf_token %}
+        
+        <div class="form-group">
+            <label for="recipients">Кому (email-адреса, через запятую или пробел):</label>
+            <input type="text" name="recipients" id="recipients" 
+                   value="{{ recipients_str }}" required 
+                   placeholder="user1@example.com, user2@example.com">
+            <small style="color: #7f8c8d; display: block; margin-top: 5px;">
+                Доступные email: user1@example.com, user2@example.com
+            </small>
+        </div>
+        
+        <div class="form-group">
+            <label for="subject">Тема:</label>
+            <input type="text" name="subject" id="subject" value="{{ subject }}" required
+                   placeholder="Введите тему письма">
+        </div>
+        
+        <div class="form-group">
+            <label for="body">Сообщение:</label>
+            <textarea name="body" id="body" rows="10" required 
+                      placeholder="Введите текст сообщения...">{{ body }}</textarea>
+        </div>
+        
+        <div class="form-group checkbox">
+            <label>
+                <input type="checkbox" name="is_draft"> Сохранить как черновик
+            </label>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">✉️ Отправить</button>
+            <button type="button" onclick="location.href='{% url 'inbox' %}'" class="btn-secondary">Отмена</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
