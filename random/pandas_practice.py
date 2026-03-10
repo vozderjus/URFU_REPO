@@ -1,14 +1,14 @@
-import pandas as pd
+# import pandas as pd
 
 
-def Series():
-    nums = list(range(1, 27))
+# def Series():
+#     nums = list(range(1, 27))
 
-    chars = [chr(i) for i in range(ord('a'), ord('z') + 1)]
+#     chars = [chr(i) for i in range(ord('a'), ord('z') + 1)]
 
-    series = pd.Series(data=nums, index=chars)
+#     series = pd.Series(data=nums, index=chars)
 
-    return series
+#     return series
 
 
 # ---
@@ -41,27 +41,27 @@ def Series():
 # ---
 
 
-# import sqlite3
-# import pandas as pd
+import sqlite3
+import pandas as pd
 
-# conn = sqlite3.connect('european_database.sqlite')
+conn = sqlite3.connect('european_database.sqlite')
 
-# query = """
-# SELECT
-# m.*, d.name, d.country
-# FROM matchs m
-# JOIN divisions d ON d.division == m.Div
-# """
-# df = pd.read_sql_query(query, conn)
+query = """
+SELECT
+m.*, d.name, d.country
+FROM matchs m
+JOIN divisions d ON d.division == m.Div
+"""
+df = pd.read_sql_query(query, conn)
 
-# conn.close()
+conn.close()
 
-# df_country = df[['country']].drop_duplicates()
+df_country = df[['country']].drop_duplicates()
 
-# new_conn = sqlite3.connect('new_database.sqlite')
-# df_country.to_sql('countries', new_conn, if_exists='replace', index=False)
+new_conn = sqlite3.connect('new_database.sqlite')
+df_country.to_sql('countries', new_conn, if_exists='replace', index=False)
 
-# new_conn.close()
+new_conn.close()
 
 
 # ---
