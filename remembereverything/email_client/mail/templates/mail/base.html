@@ -20,7 +20,7 @@
                 <ul>
                     <li class="{% if folder == 'inbox' %}active{% endif %}">
                         <a href="{% url 'inbox' %}">📥 Входящие 
-                            {% if unread_count %}<span class="badge">{{ unread_count }}</span>{% endif %}
+                            <span id="unread-count" class="badge" style="display: none;"></span>
                         </a>
                     </li>
                     <li class="{% if folder == 'outbox' %}active{% endif %}">
@@ -42,13 +42,11 @@
             </div>
         </aside>
         <main class="content">
-            {% if messages %}
             <div class="messages">
                 {% for message in messages %}
                 <div class="message {{ message.tags }}">{{ message }}</div>
                 {% endfor %}
             </div>
-            {% endif %}
             
             {% block content %}{% endblock %}
         </main>
@@ -60,6 +58,25 @@
     {% endif %}
     
     <script src="{% static 'mail/js/main.js' %}"></script>
+    <script>
+        // Загрузка статистики
+        function loadStats() {
+            fetch('/api/stats/')
+                .then(response => response.json())
+                .then(data => {
+                    const unreadSpan = document.getElementById('unread-count');
+                    if (unreadSpan && data.unread_count > 0) {
+                        unreadSpan.textContent = data.unread_count;
+                        unreadSpan.style.display = 'inline';
+                    } else if (unreadSpan) {
+                        unreadSpan.style.display = 'none';
+                    }
+                });
+        }
+        
+        // Загружаем статистику при загрузке страницы
+        document.addEventListener('DOMContentLoaded', loadStats);
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

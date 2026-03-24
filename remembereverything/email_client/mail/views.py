@@ -1,12 +1,11 @@
-# mail/views.py
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import login, authenticate, logout
-from django.contrib.auth.decorators import login_required  # ЭТОТ ИМПОРТ ДОЛЖЕН БЫТЬ ПЕРВЫМ!
+from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
-from django.http import JsonResponse
-from django.views.decorators.http import require_POST
-from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, HttpResponseForbidden
+from django.views.decorators.http import require_POST, require_http_methods
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.db.models import Q
 from django.utils import timezone
 import json
@@ -14,8 +13,11 @@ import json
 from .models import Email, EmailStatus
 from django.contrib.auth.models import User
 
-# HTML Views
+
+# Вход в систему
+
 def login_view(request):
+    """Страница входа"""
     if request.user.is_authenticated:
         return redirect('inbox')
     
@@ -27,7 +29,8 @@ def login_view(request):
             user = authenticate(username=username, password=password)
             if user is not None:
                 login(request, user)
-                return redirect('inbox')
+                next_url = request.GET.get('next', 'inbox')
+                return redirect(next_url)
         else:
             messages.error(request, 'Неверное имя пользователя или пароль')
     else:
@@ -36,9 +39,12 @@ def login_view(request):
     return render(request, 'mail/login.html', {'form': form})
 
 def logout_view(request):
+    """Выход из системы"""
     logout(request)
     return redirect('login')
 
+
+# Основные страницы
 @login_required
 def inbox(request):
     """Входящие письма"""
@@ -116,6 +122,8 @@ def drafts(request):
         'folder_name': 'Черновики'
     })
 
+# ==================== Работа с письмами ====================
+
 @login_required
 def email_detail(request, email_id):
     """Просмотр письма"""
@@ -130,7 +138,7 @@ def email_detail(request, email_id):
     if request.user in email.recipients.all():
         EmailStatus.objects.filter(email=email, user=request.user).update(is_read=True)
     
-    # Получаем статус для текущего пользователя
+    # Получаем статус
     try:
         status = email.statuses.get(user=request.user)
     except EmailStatus.DoesNotExist:
@@ -151,7 +159,7 @@ def compose(request):
         recipients_str = request.POST.get('recipients', '').strip()
         is_draft = request.POST.get('is_draft') == 'on'
         
-        # Валидация полей
+        # Ошибки
         if not subject:
             messages.error(request, 'Укажите тему письма')
             return render(request, 'mail/compose.html', {
@@ -166,7 +174,7 @@ def compose(request):
                 'recipients_str': recipients_str
             })
         
-        # Разбираем получателей (через запятую или пробел)
+        # Разбираем получателей
         recipient_emails = []
         for part in recipients_str.replace(',', ' ').split():
             email = part.strip()
@@ -180,13 +188,13 @@ def compose(request):
                 'body': body
             })
         
-        # Находим пользователей по email
+        # Находим пользователей
         recipients = User.objects.filter(email__in=recipient_emails)
         
         if len(recipients) != len(recipient_emails):
             found_emails = set(recipients.values_list('email', flat=True))
             not_found = set(recipient_emails) - found_emails
-            messages.error(request, f'Пользователи с email {", ".join(not_found)} не найдены')
+            messages.error(request, f'Пользователи не найдены: {", ".join(not_found)}')
             return render(request, 'mail/compose.html', {
                 'subject': subject,
                 'body': body,
@@ -209,7 +217,7 @@ def compose(request):
                 
                 # Статус для отправителя
                 EmailStatus.objects.create(
-                    email=email,
+                    email=email, 
                     user=request.user,
                     folder=Email.Folder.OUTBOX,
                     is_read=True
@@ -246,14 +254,17 @@ def compose(request):
     
     return render(request, 'mail/compose.html')
 
-# API Views для AJAX запросов
+
 @login_required
 @require_POST
-@csrf_exempt
 def api_move_email(request, email_id):
-    """API для перемещения письма"""
     try:
         email = Email.objects.get(id=email_id)
+        
+        # Проверяем права доступа
+        if email.sender != request.user and request.user not in email.recipients.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+        
         data = json.loads(request.body)
         folder = data.get('folder')
         
@@ -265,6 +276,90 @@ def api_move_email(request, email_id):
         email_status.save()
         
         return JsonResponse({'status': 'success', 'folder': folder})
+        
+    except Email.DoesNotExist:
+        return JsonResponse({'error': 'Email not found'}, status=404)
+    except EmailStatus.DoesNotExist:
+        return JsonResponse({'error': 'Status not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_POST
+def api_delete_email(request, email_id):
+    """Удаление письма (AJAX)"""
+    try:
+        email = Email.objects.get(id=email_id)
+        
+        # Проверяем права доступа
+        if email.sender != request.user and request.user not in email.recipients.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+        
+        try:
+            status = email.statuses.get(user=request.user)
+            if status.folder == Email.Folder.TRASH:
+                # Полное удаление из корзины
+                status.delete()
+                if email.statuses.count() == 0:
+                    email.delete()
+            else:
+                # Перемещаем в корзину
+                status.folder = Email.Folder.TRASH
+                status.save()
+        except EmailStatus.DoesNotExist:
+            email.delete()
+        
+        return JsonResponse({'status': 'success'})
+        
+    except Email.DoesNotExist:
+        return JsonResponse({'error': 'Email not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_POST
+def api_mark_read(request, email_id):
+    """Отметка о прочтении (AJAX)"""
+    try:
+        email = Email.objects.get(id=email_id)
+        
+        # Проверяем права доступа
+        if request.user not in email.recipients.all():
+            return JsonResponse({'error': 'Access denied'}, status=403)
+        
+        updated = EmailStatus.objects.filter(
+            email_id=email_id, 
+            user=request.user
+        ).update(is_read=True)
+        
+        if updated:
+            return JsonResponse({'status': 'success'})
+        else:
+            return JsonResponse({'error': 'Status not found'}, status=404)
+            
+    except Email.DoesNotExist:
+        return JsonResponse({'error': 'Email not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+@login_required
+@require_POST
+def api_restore_email(request, email_id):
+    """Восстановление письма из корзины (AJAX)"""
+    try:
+        email = Email.objects.get(id=email_id)
+        
+        email_status = email.statuses.get(user=request.user)
+        
+        if email_status.folder == Email.Folder.TRASH:
+            email_status.folder = Email.Folder.INBOX
+            email_status.save()
+            return JsonResponse({'status': 'success', 'folder': 'INBOX'})
+        else:
+            return JsonResponse({'error': 'Email not in trash'}, status=400)
+            
     except Email.DoesNotExist:
         return JsonResponse({'error': 'Email not found'}, status=404)
     except EmailStatus.DoesNotExist:
@@ -274,37 +369,110 @@ def api_move_email(request, email_id):
 
 @login_required
 @require_POST
-@csrf_exempt
-def api_delete_email(request, email_id):
-    """API для удаления письма"""
+def api_send_draft(request, draft_id):
+    """Отправка черновика (AJAX)"""
     try:
-        email = Email.objects.get(id=email_id)
+        draft = Email.objects.get(
+            id=draft_id,
+            sender=request.user,
+            is_draft=True
+        )
         
-        try:
-            status = email.statuses.get(user=request.user)
-            if status.folder == Email.Folder.TRASH:
-                status.delete()
-                if email.statuses.count() == 0:
-                    email.delete()
-            else:
-                status.folder = Email.Folder.TRASH
+        # Отправляем черновик
+        draft.is_draft = False
+        draft.sent_at = timezone.now()
+        draft.save()
+        
+        # Обновляем статус отправителя
+        sender_status, _ = EmailStatus.objects.get_or_create(
+            email=draft,
+            user=request.user,
+            defaults={'folder': Email.Folder.OUTBOX}
+        )
+        sender_status.folder = Email.Folder.OUTBOX
+        sender_status.is_read = True
+        sender_status.save()
+        
+        # Создаем статусы для получателей
+        for recipient in draft.recipients.all():
+            status, created = EmailStatus.objects.get_or_create(
+                email=draft,
+                user=recipient,
+                defaults={
+                    'folder': Email.Folder.INBOX,
+                    'is_read': False
+                }
+            )
+            if not created:
+                status.folder = Email.Folder.INBOX
+                status.is_read = False
+                status.received_at = timezone.now()
                 status.save()
-        except EmailStatus.DoesNotExist:
-            email.delete()
         
         return JsonResponse({'status': 'success'})
+        
     except Email.DoesNotExist:
-        return JsonResponse({'error': 'Email not found'}, status=404)
+        return JsonResponse({'error': 'Draft not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=400)
 
+
 @login_required
-@require_POST
-@csrf_exempt
-def api_mark_read(request, email_id):
-    """API для отметки о прочтении"""
-    try:
-        EmailStatus.objects.filter(email_id=email_id, user=request.user).update(is_read=True)
-        return JsonResponse({'status': 'success'})
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=400)
+@require_http_methods(["GET"])
+def api_search_users(request):
+    query = request.GET.get('q', '').strip()
+    
+    if len(query) < 2:
+        return JsonResponse({'users': []})
+    
+    users = User.objects.filter(
+        Q(username__icontains=query) |
+        Q(email__icontains=query) |
+        Q(first_name__icontains=query) |
+        Q(last_name__icontains=query)
+    ).filter(is_active=True).exclude(id=request.user.id)[:10]
+    
+    users_data = [
+        {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'full_name': user.get_full_name() or user.username
+        }
+        for user in users
+    ]
+    
+    return JsonResponse({'users': users_data})
+
+
+@login_required
+def api_stats(request):
+    stats = {
+        'inbox_count': EmailStatus.objects.filter(
+            user=request.user,
+            folder=Email.Folder.INBOX
+        ).count(),
+        'unread_count': EmailStatus.objects.filter(
+            user=request.user,
+            folder=Email.Folder.INBOX,
+            is_read=False
+        ).count(),
+        'outbox_count': EmailStatus.objects.filter(
+            user=request.user,
+            folder=Email.Folder.OUTBOX
+        ).count(),
+        'archive_count': EmailStatus.objects.filter(
+            user=request.user,
+            folder=Email.Folder.ARCHIVE
+        ).count(),
+        'trash_count': EmailStatus.objects.filter(
+            user=request.user,
+            folder=Email.Folder.TRASH
+        ).count(),
+        'drafts_count': Email.objects.filter(
+            sender=request.user,
+            is_draft=True
+        ).count()
+    }
+    
+    return JsonResponse(stats)
