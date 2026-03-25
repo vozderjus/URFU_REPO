@@ -122,11 +122,9 @@ def drafts(request):
         'folder_name': 'Черновики'
     })
 
-# ==================== Работа с письмами ====================
 
 @login_required
 def email_detail(request, email_id):
-    """Просмотр письма"""
     email = get_object_or_404(
         Email.objects.filter(
             Q(sender=request.user) | Q(recipients=request.user)
@@ -152,7 +150,6 @@ def email_detail(request, email_id):
 
 @login_required
 def compose(request):
-    """Написание письма"""
     if request.method == 'POST':
         subject = request.POST.get('subject', '').strip()
         body = request.POST.get('body', '').strip()
