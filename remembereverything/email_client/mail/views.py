@@ -267,7 +267,7 @@ def api_move_email(request, email_id):
         
         if folder not in dict(Email.Folder.choices):
             return JsonResponse({'error': 'Invalid folder'}, status=400)
-        
+
         email_status = email.statuses.get(user=request.user)
         email_status.folder = folder
         email_status.save()
@@ -289,7 +289,7 @@ def api_delete_email(request, email_id):
     """Удаление письма (AJAX)"""
     try:
         email = Email.objects.get(id=email_id)
-        
+
         # Проверяем права доступа
         if email.sender != request.user and request.user not in email.recipients.all():
             return JsonResponse({'error': 'Access denied'}, status=403)

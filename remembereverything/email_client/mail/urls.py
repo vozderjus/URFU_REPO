@@ -19,4 +19,5 @@ urlpatterns = [
     path('api/email/<int:email_id>/move/', views.api_move_email, name='api_move_email'),
     path('api/email/<int:email_id>/delete/', views.api_delete_email, name='api_delete_email'),
     path('api/email/<int:email_id>/read/', views.api_mark_read, name='api_mark_read'),
+    path('api/stats/', views.api_stats),
 ]
