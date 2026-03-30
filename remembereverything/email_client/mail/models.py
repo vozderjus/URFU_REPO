@@ -8,7 +8,7 @@ class Email(models.Model):
         OUTBOX = 'OUTBOX', 'Исходящие'
         ARCHIVE = 'ARCHIVE', 'Архив'
         TRASH = 'TRASH', 'Корзина'
-        DRAFTS = 'DRAFTS', 'Черновики'  # Добавляем черновики
+        DRAFTS = 'DRAFTS', 'Черновики'
     
     sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name='sent_emails')
     recipients = models.ManyToManyField(User, related_name='received_emails')

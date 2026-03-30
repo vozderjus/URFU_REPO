@@ -3,9 +3,8 @@ from django.contrib.auth import login, authenticate, logout
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib import messages
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse
 from django.views.decorators.http import require_POST, require_http_methods
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.db.models import Q
 from django.utils import timezone
 import json
